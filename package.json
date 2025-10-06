@@ -1,0 +1,29 @@
+{
+  "name": "teams-to-rag",
+  "version": "1.0.0",
+  "description": "CLI tool to generate high-quality RAG documents from Microsoft Teams chats",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "teams-to-rag": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "teams",
+    "rag",
+    "microsoft-graph",
+    "cli"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "commander": "^12.1.0",
+    "axios": "^1.7.9",
+    "chalk": "^5.4.1",
+    "ora": "^8.1.1"
+  }
+}
