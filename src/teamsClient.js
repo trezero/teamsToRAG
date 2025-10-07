@@ -12,15 +12,14 @@ const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
  */
 export async function fetchChatMessages(accessToken, chatId, maxMessages = null, sinceDate = null) {
   const messages = [];
+
+  // Note: Despite some documentation suggesting otherwise, chat messages API
+  // does NOT reliably support $filter on createdDateTime in all scenarios
+  // We'll fetch all messages and filter client-side for now
   let url = `${GRAPH_API_BASE}/chats/${chatId}/messages?$top=50`;
 
-  // Add date filter if provided
-  if (sinceDate) {
-    const filterDate = sinceDate.toISOString();
-    url += `&$filter=createdDateTime gt ${filterDate}`;
-  }
-
   let fetchedCount = 0;
+  const sinceDateMs = sinceDate ? sinceDate.getTime() : null;
 
   try {
     while (url) {
@@ -32,8 +31,27 @@ export async function fetchChatMessages(accessToken, chatId, maxMessages = null,
       });
 
       const batch = response.data.value;
-      messages.push(...batch);
-      fetchedCount += batch.length;
+
+      // Client-side filtering if sinceDate provided
+      if (sinceDateMs) {
+        // Filter messages newer than sinceDate
+        const filteredBatch = batch.filter(msg => {
+          const msgDate = new Date(msg.createdDateTime).getTime();
+          return msgDate > sinceDateMs;
+        });
+
+        // If all messages in this batch are older than sinceDate, stop pagination
+        // (messages are returned newest first)
+        if (filteredBatch.length === 0 && batch.length > 0) {
+          break;
+        }
+
+        messages.push(...filteredBatch);
+        fetchedCount += filteredBatch.length;
+      } else {
+        messages.push(...batch);
+        fetchedCount += batch.length;
+      }
 
       // Check if we've reached the maximum
       if (maxMessages && fetchedCount >= maxMessages) {
@@ -80,17 +98,21 @@ export async function fetchChatMessages(accessToken, chatId, maxMessages = null,
  * @param {string} teamId - Teams team ID
  * @param {string} channelId - Teams channel ID
  * @param {number|null} maxMessages - Maximum number of messages to fetch (null for all)
- * @param {Date|null} sinceDate - Only fetch messages created after this date
+ * @param {Date|null} sinceDate - IGNORED for channels (not supported by API)
  * @returns {Promise<Array>} Array of channel messages
  */
 export async function fetchChannelMessages(accessToken, teamId, channelId, maxMessages = null, sinceDate = null) {
   const messages = [];
+
+  // Note: Channel messages API does NOT support $filter on createdDateTime
+  // Graph API documentation states: "The other OData query parameters aren't currently supported"
+  // Only $top and $expand are supported
+  // Therefore, we always fetch ALL messages and cannot do incremental updates via API
   let url = `${GRAPH_API_BASE}/teams/${teamId}/channels/${channelId}/messages?$top=50`;
 
-  // Add date filter if provided
+  // Warn if sinceDate was provided but will be ignored
   if (sinceDate) {
-    const filterDate = sinceDate.toISOString();
-    url += `&$filter=createdDateTime gt ${filterDate}`;
+    console.log('  Note: Channel messages API does not support date filtering. Fetching all messages...');
   }
 
   let fetchedCount = 0;

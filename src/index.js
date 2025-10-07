@@ -144,7 +144,7 @@ program
           isIncremental = true;
           sinceDate = existingExport.lastRun;
           console.log(chalk.cyan(`📄 Found existing export from ${existingExport.lastRun.toLocaleString()}`));
-          console.log(chalk.cyan(`   Will fetch only new messages since that time...\n`));
+          console.log(chalk.cyan(`   Fetching new messages (client-side filtering)...\n`));
         }
       }
 
@@ -215,7 +215,7 @@ program
         });
 
         if (isIncremental) {
-          // Append to existing file
+          // Append to existing file (both chats and channels)
           const appendedCount = appendMessagesToExport(
             outputPath,
             messages,

@@ -376,3 +376,28 @@ export function generateStatistics(messages, members) {
 
   return stats;
 }
+
+/**
+ * Completely overwrites an existing export file with new content
+ * Used for channels where incremental updates are not supported
+ * @param {string} outputPath - Output file path
+ * @param {string} content - New complete document content
+ * @returns {boolean} True if successful
+ */
+export function overwriteExport(outputPath, content) {
+  try {
+    const dir = path.dirname(outputPath);
+
+    // Create directory if it doesn't exist
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+
+    // Overwrite the file completely
+    fs.writeFileSync(outputPath, content, 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Failed to overwrite export:', error.message);
+    return false;
+  }
+}

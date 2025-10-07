@@ -251,37 +251,57 @@ npm start generate --no-group-by-date
 
 ### Incremental Updates
 
-The tool automatically supports incremental updates! When you run the same command twice:
+The tool supports **smart incremental updates** with client-side filtering for both chats and channels:
+
+#### How Incremental Updates Work
 
 **First run** (creates new export):
 ```bash
-npm start generate --team-id "abc..." --channel-id "def..."
-# Creates: ./output/channel-abc...-def....md
+npm start generate --chat-id "19:abc..."
+# Creates: ./output/chat-19_abc....md
 # Fetches ALL messages
 ```
 
-**Second run** (updates existing export):
+**Second run** (incremental update):
 ```bash
-npm start generate --team-id "abc..." --channel-id "def..."
-# Updates: ./output/channel-abc...-def....md
-# Only fetches NEW messages since last run
-# Appends them to the existing file
+npm start generate --chat-id "19:abc..."
+# Updates: ./output/chat-19_abc....md
+# Fetches messages from API (newest first) and filters client-side
+# Stops pagination once old messages are reached
+# Appends only new messages to existing file
 # Updates the "Last Run" timestamp
 ```
 
 **How it works:**
-1. The tool generates consistent filenames based on chat/channel IDs
-2. On subsequent runs, it detects the existing export file
-3. Reads the "Last Run" timestamp from the file header
-4. Uses Graph API `$filter` to fetch only messages created after that timestamp
-5. Appends new messages to the end of the file (chronological order)
-6. Updates the header with new message count and timestamp
+1. Tool generates consistent filenames based on chat/channel ID
+2. On subsequent runs, detects existing export file
+3. Reads "Last Run" timestamp from file header
+4. Fetches messages page by page (newest first)
+5. Filters out messages older than last run (client-side)
+6. Stops pagination early once old messages are found
+7. Appends new messages to end of file (chronological order)
+8. Updates header with new message count and timestamp
 
 **Benefits:**
-- ⚡ Much faster when checking for updates
+- ⚡ Faster than full refresh - stops early when old messages found
 - 💾 Preserves existing content
-- 🔄 Always up-to-date with latest messages
-- 📊 Maintains accurate total message counts
+- 🔄 Always up-to-date
+- 📊 Maintains accurate counts
+- ✅ Works for both chats and channels
+
+#### API Limitations
+
+Microsoft Graph API for both [chat messages](https://learn.microsoft.com/en-us/graph/api/chat-list-messages) and [channel messages](https://learn.microsoft.com/en-us/graph/api/channel-list-messages) **does not support `$filter` on `createdDateTime`** in all scenarios. The tool uses **client-side filtering** instead:
+
+- Fetches messages page by page (50 at a time, newest first)
+- Filters out old messages in memory
+- Stops pagination when it reaches messages older than last export
+- Only processes/appends new messages
+
+**Performance notes:**
+- For chats/channels with few new messages: ⚡ Very fast (stops after 1-2 pages)
+- For chats/channels with many new messages: Still efficient (only fetches what's needed)
+- Large exports are automatically paginated
 
 **To force a full re-export:**
 - Delete the existing output file, or
