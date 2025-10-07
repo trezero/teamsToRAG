@@ -221,3 +221,48 @@ export async function fetchChatMembers(accessToken, chatId) {
     return [];
   }
 }
+
+/**
+ * Fetches team metadata
+ * @param {string} accessToken - OAuth2 access token
+ * @param {string} teamId - Teams team ID
+ * @returns {Promise<Object>} Team metadata
+ */
+export async function fetchTeamMetadata(accessToken, teamId) {
+  try {
+    const response = await axios.get(`${GRAPH_API_BASE}/teams/${teamId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    console.warn('Could not fetch team metadata:', error.message);
+    return {};
+  }
+}
+
+/**
+ * Fetches channel metadata
+ * @param {string} accessToken - OAuth2 access token
+ * @param {string} teamId - Teams team ID
+ * @param {string} channelId - Teams channel ID
+ * @returns {Promise<Object>} Channel metadata
+ */
+export async function fetchChannelMetadata(accessToken, teamId, channelId) {
+  try {
+    const response = await axios.get(`${GRAPH_API_BASE}/teams/${teamId}/channels/${channelId}`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return response.data;
+  } catch (error) {
+    console.warn('Could not fetch channel metadata:', error.message);
+    return {};
+  }
+}

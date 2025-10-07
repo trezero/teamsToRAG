@@ -11,6 +11,8 @@ import {
   fetchChannelMessages,
   fetchChatMetadata,
   fetchChatMembers,
+  fetchTeamMetadata,
+  fetchChannelMetadata,
 } from './teamsClient.js';
 import {
   generateRAGDocument,
@@ -73,33 +75,9 @@ program
         process.exit(1);
       }
 
-      // Determine output path with consistent naming for incremental updates
-      let outputPath;
-      if (options.output) {
-        outputPath = options.output;
-      } else {
-        // Use a consistent filename for the same source (for incremental updates)
-        // Sanitize IDs to remove invalid filename characters (: < > " / \ | ? *)
-        const sanitizeForFilename = (str) => {
-          return str.replace(/[:<>"\/\\|?*]/g, '_');
-        };
-
-        let filename;
-        if (isChannel) {
-          const teamSafe = sanitizeForFilename(teamId);
-          const channelSafe = sanitizeForFilename(channelId);
-          filename = `channel-${teamSafe}.md`;
-        } else {
-          const chatSafe = sanitizeForFilename(chatId);
-          filename = `chat-${chatSafe}.md`;
-        }
-        outputPath = path.join(outputDir, filename);
-      }
-
       const authMode = process.env.AUTH_MODE || 'application';
       console.log(chalk.blue.bold('\n🚀 Teams to RAG Generator\n'));
-      console.log(chalk.gray(`Auth mode: ${authMode}`));
-      console.log(chalk.gray(`Output: ${outputPath}\n`));
+      console.log(chalk.gray(`Auth mode: ${authMode}\n`));
 
       // Step 1: Authenticate
       let authSpinner;
@@ -133,7 +111,77 @@ program
         }
       }
 
-      // Step 2: Check for existing export (incremental mode)
+      // Step 2: Fetch metadata to get chat/channel name for filename
+      let metadata = {};
+      let members = [];
+      let sourceName = null;
+
+      if (isChat) {
+        const metadataSpinner = ora('Fetching chat metadata...').start();
+        try {
+          [metadata, members] = await Promise.all([
+            fetchChatMetadata(accessToken, chatId),
+            fetchChatMembers(accessToken, chatId),
+          ]);
+          metadataSpinner.succeed(`Chat metadata fetched (${members.length} members)`);
+
+          // Extract chat name from metadata
+          sourceName = metadata.topic || null;
+        } catch (error) {
+          metadataSpinner.warn('Could not fetch complete metadata');
+          metadata = {};
+          members = [];
+        }
+      } else if (isChannel) {
+        const metadataSpinner = ora('Fetching channel metadata...').start();
+        try {
+          const channelMetadata = await fetchChannelMetadata(accessToken, teamId, channelId);
+          metadataSpinner.succeed('Channel metadata fetched');
+
+          // Extract channel name from metadata
+          sourceName = channelMetadata.displayName || null;
+        } catch (error) {
+          metadataSpinner.warn('Could not fetch channel metadata');
+        }
+      }
+
+      // Step 3: Determine output path with consistent naming for incremental updates
+      let outputPath;
+      if (options.output) {
+        outputPath = options.output;
+      } else {
+        // Sanitize name to remove invalid filename characters (: < > " / \ | ? *)
+        const sanitizeForFilename = (str) => {
+          return str
+            .replace(/[:<>"\/\\|?*]/g, '-')  // Replace invalid chars with dash
+            .replace(/\s+/g, '-')              // Replace spaces with dash
+            .replace(/-+/g, '-')               // Replace multiple dashes with single
+            .replace(/^-|-$/g, '');            // Remove leading/trailing dashes
+        };
+
+        let filename;
+        if (sourceName) {
+          // Use the chat/channel name if available
+          const nameSafe = sanitizeForFilename(sourceName);
+          const prefix = isChannel ? 'channel' : 'chat';
+          filename = `${prefix}-${nameSafe}.md`;
+        } else {
+          // Fallback to using IDs if name not available
+          if (isChannel) {
+            const teamSafe = sanitizeForFilename(teamId.substring(0, 8));
+            const channelSafe = sanitizeForFilename(channelId.substring(0, 8));
+            filename = `channel-${teamSafe}-${channelSafe}.md`;
+          } else {
+            const chatSafe = sanitizeForFilename(chatId.substring(0, 8));
+            filename = `chat-${chatSafe}.md`;
+          }
+        }
+        outputPath = path.join(outputDir, filename);
+      }
+
+      console.log(chalk.gray(`Output: ${outputPath}\n`));
+
+      // Step 4: Check for existing export (incremental mode)
       let existingExport = null;
       let sinceDate = null;
       let isIncremental = false;
@@ -145,25 +193,6 @@ program
           sinceDate = existingExport.lastRun;
           console.log(chalk.cyan(`📄 Found existing export from ${existingExport.lastRun.toLocaleString()}`));
           console.log(chalk.cyan(`   Fetching new messages (client-side filtering)...\n`));
-        }
-      }
-
-      // Step 3: Fetch metadata (for chats only, channels don't support this)
-      let metadata = {};
-      let members = [];
-
-      if (isChat) {
-        const metadataSpinner = ora('Fetching chat metadata...').start();
-        try {
-          [metadata, members] = await Promise.all([
-            fetchChatMetadata(accessToken, chatId),
-            fetchChatMembers(accessToken, chatId),
-          ]);
-          metadataSpinner.succeed(`Chat metadata fetched (${members.length} members)`);
-        } catch (error) {
-          metadataSpinner.warn('Could not fetch complete metadata');
-          metadata = {};
-          members = [];
         }
       }
 
