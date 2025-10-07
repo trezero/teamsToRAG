@@ -438,6 +438,216 @@ npm run dev
 
 MIT
 
+## RAG Optimization with Claude AI
+
+After exporting your Teams chat, you can optimize it for RAG systems using Claude AI.
+
+### What is RAG Optimization?
+
+The RAG optimizer uses Claude AI to:
+- **Extract Topics**: Identify and tag main discussion themes
+- **Capture Decisions**: Document technical decisions with full context
+- **Track Action Items**: Extract tasks and assignments
+- **Generate Summaries**: Create searchable context summaries for each thread
+- **Preserve Technical Details**: Extract code, commands, and configurations
+- **Identify Participants**: Track who contributed what
+
+### Setup
+
+1. Get an Anthropic API key from [Anthropic Console](https://console.anthropic.com/)
+2. Add it to your `.env` file:
+```env
+ANTHROPIC_API_KEY=your-anthropic-api-key-here
+```
+
+### Usage
+
+```bash
+# Optimize an exported chat for RAG
+npm run optimize -- output/chat-19_meeting_*.md
+
+# With custom options
+npm run optimize -- output/chat-19_meeting_*.md \
+  --output ./output/rag \
+  --format structured \
+  --model claude-3-5-sonnet-20241022
+```
+
+### CLI Options
+
+```
+Usage: optimize-rag [options] <input>
+
+Arguments:
+  input                          Path to the Teams export markdown file
+
+Options:
+  -o, --output <dir>            Output directory (default: "./output/rag")
+  -k, --api-key <key>           Anthropic API key (or set ANTHROPIC_API_KEY env var)
+  -m, --model <model>           Claude model to use (default: "claude-3-5-sonnet-20241022")
+  -f, --format <format>         Output format: structured or semantic (default: "structured")
+  --no-topics                   Exclude topics extraction
+  --no-decisions                Exclude decisions extraction
+  --no-action-items             Exclude action items extraction
+  --no-summary                  Exclude summary generation
+  -c, --chunk-size <size>       Maximum chunk size in characters (default: "100000")
+  -h, --help                    Display help
+```
+
+### Output Formats
+
+#### Structured Format (Default)
+
+Creates separate documents for different content types:
+
+- **`{chat}_rag_structured.md`** - Main document with context summaries and technical details
+- **`{chat}_topics.md`** - Extracted topics and themes
+- **`{chat}_decisions.md`** - Technical decisions with context and participants
+- **`{chat}_action_items.md`** - Tasks and assignments with owners
+- **`{chat}_summary.md`** - Executive summary of the conversation
+
+Example structured output:
+```markdown
+# IRIS Dev Integration Testing - RAG Optimized
+
+**Topics:** inode etag format, Hub integration, rabbit exchanges, versity deployment
+
+## Context Summaries
+
+### 7/1/2025: Inode ETag Format Finalization
+
+The team agreed on the final payload style for inode etag numbers...
+
+**Key Points:**
+- Format is `:fsid:ino:igen`
+- Used in ngrecall command for consistency
+- Will be preserved in published events
+```
+
+#### Semantic Format
+
+Creates JSONL file optimized for vector embeddings:
+
+- **`{chat}_rag_semantic.jsonl`** - One JSON object per line, ready for embedding
+
+Each line is a JSON object:
+```json
+{
+  "id": "ctx_0",
+  "type": "context",
+  "content": "The team agreed on the final payload style for inode etag numbers...",
+  "metadata": {
+    "topic": "Inode ETag Format",
+    "timeframe": "7/1/2025",
+    "keyPoints": ["Format is :fsid:ino:igen", "Used in ngrecall"],
+    "source": "IRIS Dev Integration Testing"
+  }
+}
+```
+
+### Complete Workflow Example
+
+```bash
+# Step 1: Export your Teams chat
+npm start generate
+
+# Step 2: Optimize for RAG with Claude AI
+npm run optimize -- output/chat-19_meeting_NDQzNGVkYTEtYjU4Yi00NGFjLTliNTMtZDBlMDVlODdjZTAz@thread.v2.md
+
+# Step 3: Use the optimized files
+# - Load semantic chunks into a vector database
+# - Or use structured documents for targeted retrieval
+```
+
+### Integration with RAG Systems
+
+#### Using Semantic Chunks with Vector Databases
+
+```javascript
+import fs from 'fs';
+
+// Load semantic chunks
+const chunks = fs.readFileSync('output/rag/chat_rag_semantic.jsonl', 'utf8')
+  .split('\n')
+  .filter(line => line.trim())
+  .map(line => JSON.parse(line));
+
+// Insert into your vector database
+for (const chunk of chunks) {
+  const embedding = await embedText(chunk.content);
+  await vectorDB.insert({
+    id: chunk.id,
+    content: chunk.content,
+    embedding: embedding,
+    metadata: chunk.metadata
+  });
+}
+```
+
+#### Using Structured Documents
+
+```javascript
+// Load specific document types
+const decisions = fs.readFileSync('output/rag/chat_decisions.md', 'utf8');
+const actionItems = fs.readFileSync('output/rag/chat_action_items.md', 'utf8');
+
+// Use for targeted retrieval
+const relevantDecisions = searchInMarkdown(decisions, userQuery);
+```
+
+### API Costs
+
+Claude AI usage has associated costs:
+- **Claude 3.5 Sonnet**: ~$3 per million input tokens, ~$15 per million output tokens
+- Typical 1000-message chat (~350KB): ~$0.10-0.30 to process
+- Large exports are automatically chunked to stay within limits
+
+### Why RAG Optimization Improves Retrieval
+
+1. **Semantic Chunking**: Content split by meaning, not arbitrary size
+2. **Metadata Enrichment**: Each chunk has context for better retrieval
+3. **Structured Information**: Decisions and actions are easily searchable
+4. **Deduplication**: Repeated information is consolidated
+5. **Context Preservation**: Maintains conversation flow and relationships
+
+### Troubleshooting RAG Optimization
+
+**"ANTHROPIC_API_KEY is required"**
+- Set the environment variable: `export ANTHROPIC_API_KEY=your-key`
+- Or pass via flag: `--api-key your-key`
+
+**API rate limiting**
+- Claude has rate limits; wait a few minutes and retry
+- Consider using smaller chunks: `--chunk-size 50000`
+
+**JSON parse errors**
+- Claude's response wasn't in expected format
+- Try rerunning - responses can vary slightly
+- Verify your API key has sufficient credits
+
+## Project Structure
+
+```
+teamsToRAG/
+├── src/
+│   ├── index.js           # Main CLI for Teams export
+│   ├── auth.js            # Microsoft Graph authentication
+│   ├── teamsClient.js     # Teams API client
+│   ├── ragGenerator.js    # Basic markdown export generator
+│   ├── ragOptimizer.js    # Claude AI RAG optimizer
+│   └── optimizeRag.js     # CLI for RAG optimization
+├── output/                # Exported chat files
+│   └── rag/              # RAG-optimized outputs
+├── .env                   # Configuration (not in git)
+├── .env.sample           # Configuration template
+├── package.json          # Dependencies and scripts
+└── README.md            # This file
+```
+
 ## Support
 
 For issues or questions, please open an issue on GitHub.
+
+## License
+
+MIT

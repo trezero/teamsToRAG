@@ -5,11 +5,13 @@
   "main": "src/index.js",
   "type": "module",
   "bin": {
-    "teams-to-rag": "./src/index.js"
+    "teams-to-rag": "./src/index.js",
+    "optimize-rag": "./src/optimizeRag.js"
   },
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "optimize": "node src/optimizeRag.js"
   },
   "keywords": [
     "teams",
