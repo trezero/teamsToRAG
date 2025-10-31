@@ -2,9 +2,56 @@
 
 A CLI application that generates high-quality RAG (Retrieval-Augmented Generation) documents from Microsoft Teams chat conversations.
 
+## Quick Start
+
+Get started in 3 simple steps:
+
+### 1. Install Dependencies
+```bash
+npm install
+```
+
+### 2. Configure Azure AD
+Create a `.env` file with your Azure AD app credentials:
+```bash
+cp .env.sample .env
+```
+
+Edit `.env` with your credentials:
+```env
+TENANT_ID=your-tenant-id-here
+CLIENT_ID=your-client-id-here
+AUTH_MODE=delegated
+```
+
+> **Don't have Azure AD credentials?** See the [Azure AD Setup](#azure-ad-setup) section below.
+
+### 3. Run the Interactive Menu
+```bash
+npm start
+```
+
+Select from the menu:
+- **Option 1**: Browse and export any chat (1:1 or group)
+- **Option 2**: Browse and export any channel
+- **Option 3**: Export using chat ID from `.env`
+
+That's it! The tool will:
+1. Authenticate you with Microsoft (device code flow)
+2. Show you all your chats/channels
+3. Let you select one by number
+4. Automatically export it to a markdown file
+
+**Example Output:**
+```
+output/chat-Project-Discussion.md
+output/channel-Marketing-General.md
+```
+
 ## Features
 
 - 🔐 **Dual authentication modes**: Application (service) or Delegated (user) authentication
+- 🎯 **Interactive menu**: Browse and select chats/channels without knowing IDs
 - 💬 Fetch complete chat history from Teams chats and channels
 - 📝 Generate clean, formatted markdown documents optimized for RAG
 - 🔄 **Incremental updates**: Automatically detects existing exports and only fetches new messages
@@ -177,6 +224,50 @@ From the app's **Overview** page, copy:
 
 ## Usage
 
+### Interactive Menu (Recommended)
+
+The easiest way to use this tool is through the interactive menu:
+
+```bash
+npm start
+```
+
+This will present you with an interactive menu:
+
+```
+╔════════════════════════════════════════╗
+║   Teams to RAG Generator               ║
+╚════════════════════════════════════════╝
+
+Please select an option:
+
+1. Find and export a chat (1:1 or group)
+2. Find and export a channel
+3. Generate from current .env settings
+4. Exit
+
+Enter your choice [1-4]:
+```
+
+**Option 1: Find and export a chat**
+- Automatically fetches all your chats
+- Displays them with names (resolves 1:1 chat user names)
+- Select by number to export
+
+**Option 2: Find and export a channel**
+- Fetches all your teams and channels
+- Displays them as "Team Name > Channel Name"
+- Select by number to export
+
+**Option 3: Generate from .env**
+- Uses the chat/channel ID already configured in your `.env` file
+- Same as running `npm start generate`
+
+**Note for Delegated Auth:** You'll be prompted to:
+1. Visit `https://microsoft.com/devicelogin`
+2. Enter the code displayed in your terminal
+3. Sign in with your Microsoft account
+
 ### Validate Configuration
 
 Before generating documents, validate your setup:
@@ -189,12 +280,9 @@ This checks that:
 - All required environment variables are set
 - Authentication works correctly
 
-**Note for Delegated Auth:** When validating or generating, you'll be prompted to:
-1. Visit `https://microsoft.com/devicelogin`
-2. Enter the code displayed in your terminal
-3. Sign in with your Microsoft account
+### Generate RAG Document (Direct Command)
 
-### Generate RAG Document
+You can also generate directly without the menu if you already know the IDs:
 
 **For Chats (1-on-1 or group):**
 

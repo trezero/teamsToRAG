@@ -22,6 +22,7 @@ import {
   parseExistingExport,
   appendMessagesToExport,
 } from './ragGenerator.js';
+import { runInteractiveMenu } from './menu.js';
 
 dotenv.config();
 
@@ -31,6 +32,14 @@ program
   .name('teams-to-rag')
   .description('Generate high-quality RAG documents from Microsoft Teams chats')
   .version('1.0.0');
+
+// Add menu command (default when no command specified)
+program
+  .command('menu', { isDefault: true })
+  .description('Interactive menu to find and export chats or channels')
+  .action(async () => {
+    await runInteractiveMenu();
+  });
 
 program
   .command('generate')
