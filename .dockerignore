@@ -1,0 +1,38 @@
+# Node modules (will be installed in container)
+node_modules/
+npm-debug.log*
+
+# Environment files (use .env.sample as template)
+.env
+
+# Git files
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Output and cache directories
+output/
+.cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Docker files (not needed in image)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Windsurf and other config
+.windsurf/
+.claude/
+.bmad-core/

@@ -1,0 +1,120 @@
+services:
+  # Main Node.js application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: teams-rag-app
+    stdin_open: true        # Keep stdin open for interactive CLI
+    tty: true               # Allocate a pseudo-TTY for terminal interaction
+    environment:
+      # Database service hostnames (using Docker service names)
+      - VECTOR_DB_HOST_URL=http://chromadb:8000
+      - GRAPH_DB_URI=bolt://neo4j:7687
+      - GRAPH_DB_USER=neo4j
+      - GRAPH_DB_PASSWORD=${NEO4J_PASSWORD:-changeme}
+      # LLM service - defaults to external ollama on host
+      # Use http://ollama:11434 if running with --profile with-ollama
+      - LLM_HOST_URL=${LLM_HOST_URL:-http://host.docker.internal:11434}
+      # Teams authentication (from host .env if exists)
+      - TENANT_ID=${TENANT_ID:-}
+      - CLIENT_ID=${CLIENT_ID:-}
+      - CLIENT_SECRET=${CLIENT_SECRET:-}
+      - AUTH_MODE=${AUTH_MODE:-delegated}
+    volumes:
+      # Mount SQLite cache as bind mount for easy access
+      - ./.cache:/app/.cache
+      # Mount output directory
+      - ./output:/app/output
+    depends_on:
+      - chromadb
+      - neo4j
+      # ollama is optional (removed from depends_on)
+    extra_hosts:
+      # Allow app to reach host machine (for external ollama)
+      - "host.docker.internal:host-gateway"
+    networks:
+      - teams-rag-network
+    restart: unless-stopped
+
+  # ChromaDB vector database
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: teams-rag-chromadb
+    # Ports not exposed by default (app uses internal Docker network)
+    # Uncomment if you need external access to ChromaDB API:
+    # ports:
+    #   - "8000:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    networks:
+      - teams-rag-network
+    restart: unless-stopped
+
+  # Neo4j graph database
+  neo4j:
+    image: neo4j:5.15-community
+    container_name: teams-rag-neo4j
+    # Ports not exposed by default (app uses internal Docker network via bolt://neo4j:7687)
+    # Uncomment if you need external access to Neo4j Browser or Bolt:
+    # ports:
+    #   - "7474:7474"  # HTTP (Neo4j Browser)
+    #   - "7687:7687"  # Bolt (Database connection)
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - neo4j-import:/var/lib/neo4j/import
+      - neo4j-plugins:/plugins
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-changeme}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      # Updated to Neo4j 5.x settings (removed deprecation warnings)
+      - NEO4J_server_memory_heap_initial__size=512m
+      - NEO4J_server_memory_heap_max__size=2G
+      - NEO4J_server_memory_pagecache_size=512m
+    networks:
+      - teams-rag-network
+    restart: unless-stopped
+
+  # Ollama LLM service (commented out - uncomment if you need bundled ollama)
+  # To use bundled ollama:
+  # 1. Uncomment this entire service
+  # 2. Set LLM_HOST_URL=http://ollama:11434 in .env
+  # 3. Run: docker compose up --build
+
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: teams-rag-ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   networks:
+  #     - teams-rag-network
+  #   restart: unless-stopped
+
+# Named volumes for persistent data
+volumes:
+  chroma-data:
+    name: teams-rag-chroma-data
+  neo4j-data:
+    name: teams-rag-neo4j-data
+  neo4j-logs:
+    name: teams-rag-neo4j-logs
+  neo4j-import:
+    name: teams-rag-neo4j-import
+  neo4j-plugins:
+    name: teams-rag-neo4j-plugins
+  # Ollama volume (only needed if you uncomment the ollama service)
+  # ollama-data:
+  #   name: teams-rag-ollama-data
+
+# Custom network for service communication
+networks:
+  teams-rag-network:
+    name: teams-rag-network
+    driver: bridge
