@@ -5,6 +5,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: teams-rag-app
+    ports:
+      - "3000:80"           # Map container port 80 to host port 3000
+      - "8000:8000"         # Expose backend API (optional)
     stdin_open: true        # Keep stdin open for interactive CLI
     tty: true               # Allocate a pseudo-TTY for terminal interaction
     environment:
