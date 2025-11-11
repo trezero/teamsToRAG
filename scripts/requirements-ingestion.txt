@@ -1,0 +1,19 @@
+# Minimal requirements for running the data ingestion script
+# (scripts/ingest_data.py)
+#
+# This is a subset of backend/requirements.txt containing only
+# the dependencies needed for local data ingestion into Milvus.
+#
+# The full backend/requirements.txt is used inside Docker containers
+# for the web application.
+
+# Vector database client
+pymilvus>=2.3.4
+
+# Sentence embeddings
+sentence-transformers>=2.2.2
+
+# Data validation and models (compatible with mcp and pydantic-settings)
+pydantic>=2.11.0,<3.0.0
+
+# Note: numpy is automatically installed as a dependency of sentence-transformers
