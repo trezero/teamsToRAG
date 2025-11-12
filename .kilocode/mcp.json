@@ -32,7 +32,8 @@
       ],
       "env": {
         "BRAVE_API_KEY": "BSAJhBNw4Tgmxp_PczmNTjb4tyITNPW"
-      }
+      },
+      "alwaysAllow": []
     }
   }
 }

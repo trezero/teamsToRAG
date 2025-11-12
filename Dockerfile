@@ -12,10 +12,14 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements and install Python dependencies
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install GPU requirements first to leverage caching
+COPY backend/gpu-requirements.txt ./gpu-requirements.txt
+RUN pip install --default-timeout=100 --retries=5 -r gpu-requirements.txt
 
-# Copy backend code
+# Install application requirements
+COPY backend/app-requirements.txt ./app-requirements.txt
+RUN pip install --default-timeout=100 --retries=5 -r app-requirements.txt
+
 COPY backend/ .
 
 # Expose port
@@ -32,12 +36,8 @@ WORKDIR /app
 
 # Copy package files
 COPY frontend/package*.json ./
-
-# Install dependencies (always use npm install for consistency)
 RUN npm install --production --no-package-lock
-
-# Copy frontend source
-COPY frontend/ .
+COPY frontend/ ./
 
 # Build the application
 RUN npm run build
@@ -55,17 +55,19 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app/backend
 
 # Copy backend source code
+# Copy backend source code and dependencies from the backend stage
 COPY --from=backend /app /app/backend
-
-# Copy and install backend requirements
-COPY backend/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=backend /usr/local/lib/python3.10/site-packages /usr/local/lib/python3.10/site-packages
 
 # Copy built frontend from frontend-build stage
 COPY --from=frontend-build /app/build /app/frontend/build
 
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy start script
+COPY start.sh /start.sh
+RUN chmod +x /start.sh
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app \
@@ -88,4 +90,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
 # Start both services
-CMD ["sh", "-c", "nginx && python main.py"]
+CMD ["/start.sh"]
