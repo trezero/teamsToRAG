@@ -1,398 +1,274 @@
-# Teams RAG Chat Application
+# Teams to RAG
 
-A complete AI chat application that allows users to query knowledge extracted from Microsoft Teams chat exports using a local Milvus vector database and Retrieval-Augmented Generation (RAG).
+Export Microsoft Teams chats to markdown and query them with AI-powered search.
 
-## Features
+## What is This?
 
-- **Data Ingestion**: Parse Teams chat Markdown files and extract structured data
-- **Vector Storage**: Store chat knowledge in local Milvus database with embeddings
-- **RAG Engine**: Implement context-aware chunking, re-ranking, and agentic retrieval
-- **Chat Interface**: Web-based UI for natural language queries and responses
-- **Local Deployment**: Full containerized setup with Docker Compose
+**Two tools in one repository:**
 
-## Architecture
+### 1. CLI Export Tool (Core Feature)
+Export Microsoft Teams conversations (1:1, group chats, channels) to RAG-optimized markdown documents. Supports incremental updates, smart caching, and optional Claude AI optimization for better retrieval.
 
-```
-teams-rag-app/
-├── docker-compose.yml          # Multi-service Docker setup
-├── backend/                    # FastAPI backend
-│   ├── main.py                # API endpoints
-│   ├── rag_engine.py          # RAG pipeline logic
-│   ├── vector_store.py        # Milvus integration
-│   ├── data_ingestion.py      # Teams parser
-│   ├── models.py              # Pydantic models
-│   └── requirements.txt       # Python dependencies
-├── frontend/                   # React frontend
-│   ├── src/
-│   │   ├── App.js
-│   │   ├── ChatInterface.js
-│   │   └── api.js
-│   └── package.json
-├── scripts/                    # Utility scripts
-│   ├── ingest_data.py         # Data ingestion tool
-│   └── setup.sh               # Setup script
-└── docs/                      # Documentation
-```
+**Key capabilities:**
+- Interactive menu for selecting chats/channels
+- Incremental exports (only fetch new messages)
+- Local SQLite caching for fast performance
+- Two authentication modes (delegated/application)
+- RAG optimization with Claude AI
+
+### 2. RAG Knowledge Base (Optional - Docker)
+Self-hosted AI chat application that lets you query your Teams data using natural language. Combines vector database (Milvus), knowledge graph (Neo4j), and LLM (Ollama/OpenAI) for intelligent search.
+
+**Key capabilities:**
+- Semantic search over Teams conversations
+- Context-aware chunking and re-ranking
+- Web-based chat interface
+- Full containerized deployment
+- No external data transmission (runs locally)
 
 ## Quick Start
 
-### Prerequisites
+### Option 1: CLI Export Tool (Fastest)
 
-- Docker and Docker Compose
-- Node.js 18+ (for development)
-- **Python 3.10** (required for data ingestion scripts)
-- Conda (recommended for Python environment management)
-
-### 1. Clone and Setup
+Export Teams chats to markdown in 3 steps:
 
 ```bash
-git clone <repository-url>
-cd teams-rag-app
-chmod +x scripts/setup.sh
-./scripts/setup.sh
-```
-
-### 2. Configure Environment
-
-Edit `.env` file with your settings:
-
-```env
-# Vector Database
-VECTOR_DB_HOST=milvus-standalone
-VECTOR_DB_PORT=19530
-
-# LLM Configuration
-LLM_HOST_URL=http://host.docker.internal:11434
-
-# Optional: OpenAI API fallback
-OPENAI_API_KEY=your-openai-api-key
-```
-
-### 3. Setup Local Python Environment for Data Ingestion
-
-**Important:** The data ingestion script ([`scripts/ingest_data.py`](scripts/ingest_data.py)) runs on your **local machine** (not inside Docker) and connects to the Milvus database running in Docker. You need to set up a local Python environment with the required dependencies.
-
-#### Option A: Using Conda (Recommended)
-
-Create a dedicated conda environment with Python 3.10:
-
-```bash
-# Create conda environment
-conda create -n milvusImport310 python=3.10 -y
-
-# Activate the environment
-conda activate milvusImport310
-
-# Install required dependencies (minimal set for ingestion only)
-pip install -r scripts/requirements-ingestion.txt
-```
-
-#### Option B: Using venv
-
-```bash
-# Create virtual environment with Python 3.10
-python3.10 -m venv venv
-
-# Activate the environment
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install required dependencies (minimal set for ingestion only)
-pip install -r scripts/requirements-ingestion.txt
-```
-
-**Note:** The [`scripts/requirements-ingestion.txt`](scripts/requirements-ingestion.txt) file contains only the minimal dependencies needed for data ingestion (`pymilvus`, `sentence-transformers`, `pydantic`). This is much lighter than the full [`backend/requirements.txt`](backend/requirements.txt) which includes FastAPI, web server dependencies, and other packages needed for the Docker container.
-
-### 4. Start Docker Services
-
-```bash
-docker-compose up -d
-```
-
-This starts:
-- Milvus vector database
-- FastAPI backend (web application)
-- React frontend
-- Supporting services (etcd, minio)
-
-### 5. Ingest Teams Data
-
-**Note:** Make sure your conda environment is activated before running ingestion!
-
-```bash
-# Activate environment (if not already active)
-conda activate milvusImport310
-
-# Ingest a directory of Teams chat files
-python scripts/ingest_data.py sample_data
-
-# Or ingest a single file
-python scripts/ingest_data.py /path/to/teams/chat.md
-
-# Verbose output for troubleshooting
-python scripts/ingest_data.py --verbose sample_data
-```
-
-The ingestion script:
-- Runs **locally** using your conda environment
-- Connects to Milvus database running in Docker
-- Parses Teams chat Markdown files
-- Generates embeddings and stores vectors
-
-### 6. Access the Application
-
-- **Frontend**: http://localhost:3000
-- **API Docs**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
-
-## API Endpoints
-
-### Core Endpoints
-
-- `POST /api/chat` - Send chat queries
-- `POST /api/ingest` - Upload and process Teams chat files
-- `GET /api/conversations` - List available conversations
-- `GET /api/health` - Service health check
-
-### Management Endpoints
-
-- `DELETE /api/conversations/{id}` - Delete conversation
-- `POST /api/optimize` - Optimize vector index
-- `GET /api/stats` - Get database statistics
-
-## Data Format
-
-Teams chats should be exported as Markdown with the following structure:
-
-```markdown
-# Chat Title
-
-**Chat Type:** Group
-**Message Count:** 150
-**Exported On:** 12/01/2023
-
-## 12/01/2023
-
-**User Name** - 10:30 AM
-Message content here...
-
-**Another User** - 10:35 AM
-Reply content...
-```
-
-## Development
-
-### Local Python Environment Setup
-
-**For Data Ingestion Only:**
-```bash
-# Using conda (recommended)
-conda create -n milvusImport310 python=3.10 -y
-conda activate milvusImport310
-pip install -r scripts/requirements-ingestion.txt
-```
-
-**For Full Backend Development:**
-If you want to run the FastAPI backend locally for development (not just ingestion):
-```bash
-# Using conda
-conda create -n teamsRAG python=3.10 -y
-conda activate teamsRAG
-pip install -r backend/requirements.txt
-
-# Or using venv
-python3.10 -m venv venv
-source venv/bin/activate
-pip install -r backend/requirements.txt
-```
-
-### Backend Development
-
-Run the backend locally (outside Docker) for development:
-
-```bash
-# Activate your environment first
-conda activate teamsRAG  # Use teamsRAG for full backend dev
-
-cd backend
-python main.py
-```
-
-### Frontend Development
-
-```bash
-cd frontend
+# 1. Install dependencies
 npm install
+
+# 2. Configure authentication (create .env file)
+cp .env.example .env
+# Edit .env with your Azure AD app credentials
+
+# 3. Run interactive menu
 npm start
 ```
 
-### Testing Data Ingestion
+See [CLI Usage Guide](docs/user-guide/cli-usage.md) for detailed instructions.
 
-Always ensure your conda environment is activated:
+### Option 2: Docker RAG Knowledge Base
+
+Deploy the full AI search application:
 
 ```bash
-# Activate environment
+# 1. Start all services
+docker-compose up -d
+
+# 2. Setup local Python environment for data ingestion
+conda create -n milvusImport310 python=3.10 -y
 conda activate milvusImport310
+pip install -r scripts/requirements-ingestion.txt
 
-# Test with sample file
-python scripts/ingest_data.py sample_data/chat-IRIS-Dev-Integration-Testing.md
+# 3. Ingest your Teams exports
+python scripts/ingest_data.py /path/to/markdown/files/
 
-# Test with directory
-python scripts/ingest_data.py sample_data/
-
-# With verbose logging
-python scripts/ingest_data.py --verbose sample_data/
+# 4. Access the application
+# Frontend: http://localhost:3000
+# API: http://localhost:8000/docs
 ```
 
-**Architecture Note:**
-```
-┌─────────────────────────────────────┐
-│   Local Machine (Your Conda Env)   │
-│                                     │
-│  python scripts/ingest_data.py      │ ← Runs locally
-│         ↓                           │
-│  Imports: backend/vector_store.py   │
-│         ↓                           │
-└─────────┼───────────────────────────┘
-          │ Network connection
-          ↓
-┌─────────────────────────────────────┐
-│     Docker Containers               │
-│                                     │
-│  - Milvus (Vector DB)               │ ← Stores vectors
-│  - FastAPI Backend (Web App)        │
-│  - React Frontend                   │
-└─────────────────────────────────────┘
-```
+See [Docker Deployment Guide](docs/user-guide/docker-deployment.md) for complete setup.
+
+## Documentation
+
+All documentation has been organized into the `docs/` directory:
+
+- [User Guide](docs/user-guide/) - Installation, configuration, and usage
+  - [CLI Usage](docs/user-guide/cli-usage.md) - Using the Teams export tool
+  - [Docker Deployment](docs/user-guide/docker-deployment.md) - Deploying the RAG application
+  - [Configuration](docs/user-guide/configuration.md) - Environment variables and settings
+  - [Troubleshooting](docs/user-guide/troubleshooting.md) - Common issues and solutions
+
+- [Developer Guide](docs/developer/) - Architecture and contribution guidelines
+  - [Architecture](docs/developer/architecture.md) - System design and components
+  - [Data Schemas](docs/developer/data-schemas.md) - Vector and graph database schemas
+  - [Contributing](docs/developer/contributing.md) - Development setup and standards
+
+- [RAG Documentation](docs/rag/) - RAG system design and strategies
+  - [Strategy Guide](docs/rag/strategy-guide.md) - Choosing optimal RAG strategies
+  - [Technical Reference](docs/rag/technical-reference.md) - RAG engine implementation
+
+- [Planning & Roadmap](docs/planning/) - Project evolution and future features
+
+## Features
+
+### CLI Export Tool
+- **Interactive Chat Selection**: Browse and select from all accessible chats and channels
+- **Incremental Updates**: Only fetch new messages since last export (chat messages only)
+- **Smart Caching**: 24-hour cache for chat/channel lists improves performance
+- **Two Auth Modes**:
+  - Delegated (device code flow) - no client secret required
+  - Application (client credentials) - for service accounts
+- **RAG Optimization**: Optional Claude AI processing for better search results
+- **Flexible Output**: Customizable markdown format with metadata and grouping options
+
+### RAG Knowledge Base (Docker)
+- **Vector Search**: Semantic similarity search using Milvus
+- **Knowledge Graph**: Relationship-based queries with Neo4j
+- **Context-Aware Chunking**: Preserves conversation flow and boundaries
+- **Re-ranking**: Cross-encoder model improves retrieval precision
+- **Agentic Retrieval**: Dynamic strategy selection based on query type
+- **Web Interface**: React-based chat UI for natural language queries
+- **Local Deployment**: All data stays on your infrastructure
+- **Dual LLM Support**: OpenAI API or local Ollama
+
+## Prerequisites
+
+### For CLI Export Tool
+- Node.js 18+
+- Azure AD application with Microsoft Graph API permissions:
+  - Delegated: `ChatMessage.Read`, `Chat.Read`, `ChannelMessage.Read.All`
+  - Application: `Chat.Read.All`, `ChannelMessage.Read.All`
+
+### For RAG Knowledge Base (Additional)
+- Docker and Docker Compose
+- Python 3.10 (for data ingestion scripts)
+- Conda (recommended for environment management)
 
 ## Configuration
 
-### Environment Variables
+Create a `.env` file in the project root:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VECTOR_DB_HOST` | Milvus host | `milvus-standalone` |
-| `VECTOR_DB_PORT` | Milvus port | `19530` |
-| `LLM_HOST_URL` | LLM service URL | `http://host.docker.internal:11434` |
-| `OPENAI_API_KEY` | OpenAI API key | - |
-| `GRAPH_DB_URI` | Neo4j connection URI | `bolt://neo4j:7687` |
+```env
+# Required for CLI Export Tool
+TENANT_ID=your-tenant-id
+CLIENT_ID=your-client-id
+AUTH_MODE=delegated  # or "application"
 
-### RAG Configuration
+# Required for application mode only
+CLIENT_SECRET=your-client-secret
 
-The RAG engine can be configured via `RAGConfig` in the backend:
+# Optional: RAG optimization
+ANTHROPIC_API_KEY=your-anthropic-key
 
-- **Embedding Model**: `all-MiniLM-L6-v2`
-- **Chunk Size**: 1000 characters
-- **Retrieval Strategy**: Hybrid with re-ranking
-- **LLM**: OpenAI GPT-3.5-turbo with Ollama fallback
+# Optional: Output settings
+OUTPUT_DIR=./output
+MAX_MESSAGES=  # empty = all messages
+INCLUDE_METADATA=true
+GROUP_BY_DATE=true
+
+# Optional: For RAG Knowledge Base
+LLM_HOST_URL=http://host.docker.internal:11434
+OPENAI_API_KEY=your-openai-key
+VECTOR_DB_HOST=milvus-standalone
+VECTOR_DB_PORT=19530
+```
+
+See [Configuration Guide](docs/user-guide/configuration.md) for complete reference.
+
+## Architecture
+
+### CLI Tool
+```
+Authentication → Microsoft Graph API → Local Cache (SQLite) → Export (Markdown)
+                                                             ↓
+                                            Optional: Claude AI Optimization
+```
+
+### RAG Knowledge Base
+```
+Teams Markdown Files → Data Ingestion → Vector Store (Milvus)
+                                      → Knowledge Graph (Neo4j)
+                                                ↓
+User Query → RAG Engine → Retrieval + Re-ranking → LLM → Response
+```
+
+## Common Commands
+
+```bash
+# CLI Export Tool
+npm start                    # Interactive menu
+npm start menu              # Same as above
+npm start generate          # Generate from .env settings
+npm start validate          # Test authentication
+
+# With CLI options
+npm start generate -- --chat-id "19:abc..." --output ./custom/path.md
+
+# RAG optimization
+npm run optimize -- output/chat-Project-Discussion.md
+
+# RAG Knowledge Base
+docker-compose up -d        # Start services
+docker-compose logs -f      # View logs
+docker-compose down         # Stop services
+
+# Data ingestion (requires conda environment)
+conda activate milvusImport310
+python scripts/ingest_data.py sample_data/
+python scripts/ingest_data.py --verbose /path/to/markdown/
+```
+
+## Important Notes
+
+### Incremental Updates
+- **Chat messages**: Supports incremental updates with client-side filtering
+- **Channel messages**: No incremental support due to Microsoft Graph API limitations (always fetches all messages)
+- Export files track `Last Run` timestamp for reliable incremental updates
+
+### Authentication
+- **Delegated mode**: User-based authentication via device code flow (15-minute expiry)
+- **Application mode**: App-based authentication with client secret (requires admin consent)
+- User must be a member of chat/channel for delegated auth
+
+### Performance
+- Chat/channel lists cached for 24 hours (configurable)
+- Force refresh available in interactive menu
+- RAG query response: < 2 seconds average
+- Vector search: < 100ms for top-k retrieval
 
 ## Troubleshooting
 
-### Common Issues
+See the [Troubleshooting Guide](docs/user-guide/troubleshooting.md) for detailed solutions.
 
-1. **ModuleNotFoundError when running ingestion script**
-   
-   This means you haven't installed the dependencies in your local Python environment:
-   ```bash
-   conda activate milvusImport310
-   pip install -r backend/requirements.txt
-   ```
+**Quick fixes:**
 
-2. **Milvus Connection Failed**
-   
-   Check if Docker containers are running:
-   ```bash
-   docker-compose ps
-   docker-compose logs milvus-standalone
-   ```
+- **Permission denied**: Check Azure AD app permissions and admin consent
+- **Device code expired**: Complete authentication within 15 minutes
+- **Milvus connection failed**: `docker-compose ps` to verify services are running
+- **Cache not refreshing**: Use menu option to force refresh or clear cache
 
-3. **Frontend Not Loading**
-   ```bash
-   cd frontend && npm install && npm start
-   ```
+## Project Status
 
-4. **Data Ingestion Errors**
-   
-   Run with verbose logging to see detailed error messages:
-   ```bash
-   conda activate milvusImport310
-   python scripts/ingest_data.py --verbose your_file.md
-   ```
+### Completed
+- CLI export tool with incremental updates
+- Interactive menu system
+- Local SQLite caching
+- Docker RAG application (MVP)
+- Vector database integration (Milvus)
+- Basic web interface
 
-5. **Python Version Issues**
-   
-   Ensure you're using Python 3.10:
-   ```bash
-   python --version  # Should show Python 3.10.x
-   
-   # If wrong version, recreate conda environment
-   conda create -n milvusImport310 python=3.10 -y
-   conda activate milvusImport310
-   ```
+### In Progress
+- Advanced RAG features (context-aware chunking, re-ranking)
+- Knowledge graph integration enhancements
+- Query expansion and multi-query support
 
-### Logs
+### Planned
+- Conversation memory in RAG app
+- Batch processing improvements
+- Analytics and usage insights
+- Multi-tenancy support
 
-```bash
-# All services
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f milvus-standalone
-docker-compose logs -f app
-```
-
-## Production Deployment
-
-### Using Docker Compose
-
-```bash
-docker-compose -f docker-compose.yml up -d --build
-```
-
-### Environment Setup
-
-1. Set production environment variables
-2. Configure proper CORS origins
-3. Set up SSL/TLS certificates
-4. Configure reverse proxy (nginx)
+See [Roadmap](docs/planning/roadmap.md) for detailed plans.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+Contributions are welcome! See the [Contributing Guide](docs/developer/contributing.md) for:
+- Development setup (local vs Docker)
+- Code organization and standards
+- Testing approach
+- Pull request guidelines
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Roadmap
-
-### Phase 1: Foundation (MVP) ✅
-- [x] Milvus setup with Docker
-- [x] Teams data parser
-- [x] Embedding pipeline
-- [x] Basic retrieval
-- [x] Minimal UI
-
-### Phase 2: RAG Enhancement
-- [ ] Context-aware chunking
-- [ ] Re-ranking integration
-- [ ] Agentic logic
-- [ ] LLM integration
-- [ ] Prompt engineering
-
-### Phase 3: Production Features
-- [ ] Query expansion
-- [ ] Conversation memory
-- [ ] Batch processing
-- [ ] Error handling
-- [ ] Performance optimization
+MIT License - see LICENSE file for details.
 
 ## Support
 
-For support and questions:
-- Create an issue on GitHub
-- Check the documentation in `/docs`
-- Review the API documentation at `/docs`
+- **Documentation**: Comprehensive guides in [docs/](docs/)
+- **Issues**: [GitHub Issues](https://github.com/your-repo/issues)
+- **API Reference**: http://localhost:8000/docs (when Docker services running)
+
+---
+
+**Note:** This project combines a lightweight CLI export tool (Node.js) with an optional full-stack RAG application (Docker). You can use just the CLI tool for exports, or deploy the complete knowledge base for AI-powered search.
