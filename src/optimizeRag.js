@@ -14,12 +14,14 @@ const program = new Command();
 
 program
   .name('optimize-rag')
-  .description('Optimize Teams chat exports for RAG using Claude AI')
+  .description('Optimize Teams chat exports for RAG using AI (Claude or Ollama)')
   .version('1.0.0')
   .argument('<input>', 'Path to the Teams export markdown file')
   .option('-o, --output <dir>', 'Output directory', './output/rag')
-  .option('-k, --api-key <key>', 'Anthropic API key (or set ANTHROPIC_API_KEY env var)')
-  .option('-m, --model <model>', 'Claude model to use', 'claude-3-5-sonnet-20241022')
+  .option('-p, --provider <provider>', 'AI provider: claude or ollama (default: from AI_PROVIDER env or ollama)')
+  .option('-k, --api-key <key>', 'Anthropic API key (only for Claude, or set ANTHROPIC_API_KEY env var)')
+  .option('-m, --model <model>', 'Model to use (default: auto-selected based on provider)')
+  .option('--ollama-endpoint <url>', 'Ollama API endpoint', process.env.OLLAMA_ENDPOINT || 'http://localhost:11434/api/generate')
   .option('-f, --format <format>', 'Output format: structured or semantic', 'structured')
   .option('--no-topics', 'Exclude topics extraction')
   .option('--no-decisions', 'Exclude decisions extraction')
@@ -30,23 +32,30 @@ program
     const spinner = ora('Initializing RAG optimizer...').start();
 
     try {
-      // Validate API key
-      const apiKey = options.apiKey || process.env.ANTHROPIC_API_KEY;
-      if (!apiKey) {
-        spinner.fail();
-        console.error(chalk.red('\n✗ Error: ANTHROPIC_API_KEY is required'));
-        console.log(chalk.yellow('\nSet it via environment variable or use --api-key flag'));
-        console.log(chalk.gray('\nExample:'));
-        console.log(chalk.gray('  export ANTHROPIC_API_KEY=your-key-here'));
-        console.log(chalk.gray('  npm run optimize -- input.md'));
-        process.exit(1);
+      // Determine provider
+      const provider = options.provider || process.env.AI_PROVIDER || 'ollama';
+
+      // Validate provider-specific requirements
+      if (provider === 'claude') {
+        const apiKey = options.apiKey || process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+          spinner.fail();
+          console.error(chalk.red('\n✗ Error: ANTHROPIC_API_KEY is required for Claude provider'));
+          console.log(chalk.yellow('\nSet it via environment variable or use --api-key flag'));
+          console.log(chalk.gray('\nExample:'));
+          console.log(chalk.gray('  export ANTHROPIC_API_KEY=your-key-here'));
+          console.log(chalk.gray('  npm run optimize -- input.md --provider claude'));
+          process.exit(1);
+        }
       }
 
-      spinner.text = 'Processing with Claude AI...';
+      spinner.text = `Processing with ${provider === 'claude' ? 'Claude AI' : 'Ollama (local AI)'}...`;
 
       const optimizeOptions = {
-        apiKey,
+        provider,
+        apiKey: options.apiKey || process.env.ANTHROPIC_API_KEY,
         model: options.model,
+        ollamaEndpoint: options.ollamaEndpoint,
         chunkSize: parseInt(options.chunkSize),
         outputFormat: options.format,
         includeTopics: options.topics !== false,
@@ -64,7 +73,11 @@ program
       console.log(chalk.blue('\n📊 RAG Optimization Configuration:'));
       console.log(chalk.gray('  Input:'), inputPath);
       console.log(chalk.gray('  Output:'), outputDir);
-      console.log(chalk.gray('  Model:'), options.model);
+      console.log(chalk.gray('  Provider:'), provider);
+      console.log(chalk.gray('  Model:'), optimizeOptions.model || '(auto-selected)');
+      if (provider === 'ollama') {
+        console.log(chalk.gray('  Ollama Endpoint:'), optimizeOptions.ollamaEndpoint);
+      }
       console.log(chalk.gray('  Format:'), options.format);
       console.log(chalk.gray('  Topics:'), optimizeOptions.includeTopics ? '✓' : '✗');
       console.log(chalk.gray('  Decisions:'), optimizeOptions.includeDecisions ? '✓' : '✗');

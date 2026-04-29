@@ -3,12 +3,14 @@ import path from 'path';
 import axios from 'axios';
 
 /**
- * RAG Optimizer - Uses Claude AI to transform Teams chat exports into RAG-optimized documents
+ * RAG Optimizer - Uses AI (Claude or Ollama) to transform Teams chat exports into RAG-optimized documents
  */
 
 const CLAUDE_API_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const DEFAULT_MODEL = 'claude-3-5-sonnet-20241022';
-const MAX_CHUNK_SIZE = 100000; // Characters per chunk to send to Claude
+const OLLAMA_API_ENDPOINT = 'http://localhost:11434/api/generate';
+const DEFAULT_CLAUDE_MODEL = 'claude-3-5-sonnet-20241022';
+const DEFAULT_OLLAMA_MODEL = 'llama3.1';
+const MAX_CHUNK_SIZE = 100000; // Characters per chunk to send to AI
 
 /**
  * Main function to optimize a Teams export for RAG
@@ -19,8 +21,10 @@ const MAX_CHUNK_SIZE = 100000; // Characters per chunk to send to Claude
  */
 export async function optimizeForRAG(inputPath, outputDir, options = {}) {
   const {
+    provider = process.env.AI_PROVIDER || 'claude', // 'claude' or 'ollama'
     apiKey = process.env.ANTHROPIC_API_KEY,
-    model = DEFAULT_MODEL,
+    model = provider === 'ollama' ? DEFAULT_OLLAMA_MODEL : DEFAULT_CLAUDE_MODEL,
+    ollamaEndpoint = process.env.OLLAMA_ENDPOINT || OLLAMA_API_ENDPOINT,
     chunkSize = MAX_CHUNK_SIZE,
     outputFormat = 'structured', // 'structured' or 'semantic'
     includeTopics = true,
@@ -29,8 +33,13 @@ export async function optimizeForRAG(inputPath, outputDir, options = {}) {
     includeSummary = true,
   } = options;
 
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is required');
+  // Validate provider-specific requirements
+  if (provider === 'claude' && !apiKey) {
+    throw new Error('ANTHROPIC_API_KEY environment variable is required for Claude provider');
+  }
+
+  if (provider !== 'claude' && provider !== 'ollama') {
+    throw new Error(`Invalid provider: ${provider}. Must be 'claude' or 'ollama'`);
   }
 
   if (!fs.existsSync(inputPath)) {
@@ -46,14 +55,18 @@ export async function optimizeForRAG(inputPath, outputDir, options = {}) {
   // Split content into processable chunks
   const chunks = splitIntoChunks(content, chunkSize);
 
-  // Process each chunk with Claude
+  // Process each chunk with AI
   const processedChunks = [];
   for (let i = 0; i < chunks.length; i++) {
     console.log(`Processing chunk ${i + 1}/${chunks.length}...`);
-    const processed = await processChunkWithClaude(
+    const processed = await processChunkWithAI(
       chunks[i],
-      apiKey,
-      model,
+      {
+        provider,
+        apiKey,
+        model,
+        ollamaEndpoint,
+      },
       {
         chunkIndex: i,
         totalChunks: chunks.length,
@@ -70,7 +83,7 @@ export async function optimizeForRAG(inputPath, outputDir, options = {}) {
   const outputFiles = {};
 
   if (includeSummary) {
-    const summary = await generateSummary(processedChunks, metadata, apiKey, model);
+    const summary = await generateSummary(processedChunks, metadata, { provider, apiKey, model, ollamaEndpoint });
     outputFiles.summary = path.join(outputDir, `${metadata.fileBaseName}_summary.md`);
     saveFile(outputFiles.summary, summary);
   }
@@ -202,11 +215,25 @@ function splitIntoChunks(content, maxChunkSize) {
 }
 
 /**
- * Process a chunk with Claude AI
+ * Process a chunk with AI (Claude or Ollama)
  */
-async function processChunkWithClaude(chunk, apiKey, model, context) {
+async function processChunkWithAI(chunk, aiConfig, context) {
+  const { provider, apiKey, model, ollamaEndpoint } = aiConfig;
   const prompt = buildProcessingPrompt(chunk, context);
 
+  if (provider === 'claude') {
+    return await processWithClaude(prompt, apiKey, model, context);
+  } else if (provider === 'ollama') {
+    return await processWithOllama(prompt, model, ollamaEndpoint, context);
+  } else {
+    throw new Error(`Unsupported provider: ${provider}`);
+  }
+}
+
+/**
+ * Process with Claude AI
+ */
+async function processWithClaude(prompt, apiKey, model, context) {
   try {
     const response = await axios.post(
       CLAUDE_API_ENDPOINT,
@@ -230,9 +257,40 @@ async function processChunkWithClaude(chunk, apiKey, model, context) {
     );
 
     const result = response.data.content[0].text;
-    return parseClaudeResponse(result, context);
+    return parseAIResponse(result, context);
   } catch (error) {
     console.error('Error processing with Claude:', error.response?.data || error.message);
+    throw error;
+  }
+}
+
+/**
+ * Process with Ollama (local AI)
+ */
+async function processWithOllama(prompt, model, endpoint, context) {
+  try {
+    const response = await axios.post(
+      endpoint,
+      {
+        model,
+        prompt,
+        stream: false,
+        format: 'json',
+      },
+      {
+        headers: {
+          'content-type': 'application/json',
+        },
+      }
+    );
+
+    const result = response.data.response;
+    return parseAIResponse(result, context);
+  } catch (error) {
+    console.error('Error processing with Ollama:', error.response?.data || error.message);
+    if (error.code === 'ECONNREFUSED') {
+      throw new Error(`Cannot connect to Ollama at ${endpoint}. Make sure Ollama is running (ollama serve)`);
+    }
     throw error;
   }
 }
@@ -307,9 +365,9 @@ Provide only the JSON response, no additional commentary.`;
 }
 
 /**
- * Parse Claude's JSON response
+ * Parse AI JSON response (works for both Claude and Ollama)
  */
-function parseClaudeResponse(response, context) {
+function parseAIResponse(response, context) {
   // Extract JSON from response (handle markdown code blocks)
   const jsonMatch = response.match(/```json\s*([\s\S]*?)\s*```/) ||
                     response.match(/```\s*([\s\S]*?)\s*```/);
@@ -323,16 +381,17 @@ function parseClaudeResponse(response, context) {
       chunkIndex: context.chunkIndex,
     };
   } catch (error) {
-    console.error('Failed to parse Claude response as JSON:', error.message);
+    console.error('Failed to parse AI response as JSON:', error.message);
     console.error('Response:', response.substring(0, 500));
-    throw new Error('Failed to parse Claude response');
+    throw new Error('Failed to parse AI response');
   }
 }
 
 /**
- * Generate overall summary using Claude
+ * Generate overall summary using AI
  */
-async function generateSummary(processedChunks, metadata, apiKey, model) {
+async function generateSummary(processedChunks, metadata, aiConfig) {
+  const { provider, apiKey, model, ollamaEndpoint } = aiConfig;
   const combinedData = {
     topics: new Set(),
     decisions: [],
@@ -367,23 +426,41 @@ Provide a 2-3 paragraph summary that captures:
 Use clear, professional language suitable for a technical audience.`;
 
   try {
-    const response = await axios.post(
-      CLAUDE_API_ENDPOINT,
-      {
-        model,
-        max_tokens: 1024,
-        messages: [{ role: 'user', content: summaryPrompt }],
-      },
-      {
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'content-type': 'application/json',
-        },
-      }
-    );
+    let summary;
 
-    const summary = response.data.content[0].text;
+    if (provider === 'claude') {
+      const response = await axios.post(
+        CLAUDE_API_ENDPOINT,
+        {
+          model,
+          max_tokens: 1024,
+          messages: [{ role: 'user', content: summaryPrompt }],
+        },
+        {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'content-type': 'application/json',
+          },
+        }
+      );
+      summary = response.data.content[0].text;
+    } else if (provider === 'ollama') {
+      const response = await axios.post(
+        ollamaEndpoint,
+        {
+          model,
+          prompt: summaryPrompt,
+          stream: false,
+        },
+        {
+          headers: {
+            'content-type': 'application/json',
+          },
+        }
+      );
+      summary = response.data.response;
+    }
 
     return `# Summary: ${metadata.topic || 'Teams Chat'}
 
